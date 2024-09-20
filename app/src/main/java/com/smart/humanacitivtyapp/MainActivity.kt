@@ -49,6 +49,8 @@ class MainActivity : AppCompatActivity(), NavigationView.OnNavigationItemSelecte
     private lateinit var drawerLayout: DrawerLayout
     private lateinit var toolbar: Toolbar
 
+    private var previousSensorData: SensorData? = null
+
     private lateinit var dataSetAccX: LineDataSet
     private lateinit var dataSetAccY: LineDataSet
     private lateinit var dataSetAccZ: LineDataSet
@@ -104,8 +106,27 @@ class MainActivity : AppCompatActivity(), NavigationView.OnNavigationItemSelecte
         // Restore the last selected file URI and process it if available
         val lastFileUri = sharedPreferences.getString(KEY_FILE_URI, null)
         if (lastFileUri != null) {
-            val fileUri = Uri.parse(lastFileUri)
-            processCsvFile(fileUri) // Process the saved file
+            CoroutineScope(Dispatchers.Main).launch {
+                val fileUri = Uri.parse(lastFileUri)
+                // Use the last opened file
+                previousSensorData = processCsvFile(fileUri)
+                previousSensorData?.let {
+                    findViewById<TextView>(R.id.tvDataPeriod).text = it.periodText
+
+                    setupChart(
+                        it.accelerometerX, it.accelerometerY, it.accelerometerZ,
+                        it.gyroscopeX, it.gyroscopeY, it.gyroscopeZ,
+                        it.activityRanges, it.activityIds
+                    )
+
+                } ?: run {
+                    Toast.makeText(
+                        this@MainActivity,
+                        "Error processing CSV data",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+            }
         }
 
         // Restore checkbox states
@@ -125,85 +146,8 @@ class MainActivity : AppCompatActivity(), NavigationView.OnNavigationItemSelecte
         }
     }
 
-    @Deprecated("This method has been deprecated in favor of using the Activity Result API\n      which brings increased type safety via an {@link ActivityResultContract} and the prebuilt\n      contracts for common intents available in\n      {@link androidx.activity.result.contract.ActivityResultContracts}, provides hooks for\n      testing, and allow receiving results in separate, testable classes independent from your\n      activity. Use\n      {@link #registerForActivityResult(ActivityResultContract, ActivityResultCallback)}\n      with the appropriate {@link ActivityResultContract} and handling the result in the\n      {@link ActivityResultCallback#onActivityResult(Object) callback}.")
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode == REQUEST_CODE_PICK_CSV && resultCode == Activity.RESULT_OK) {
-            data?.data?.let { uri ->
-                // Persist the URI permission to access the file later
-                contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
-
-                // Save the URI in SharedPreferences
-                val sharedPreferences = getSharedPreferences(PREFERENCES_FILE, MODE_PRIVATE)
-                val editor = sharedPreferences.edit()
-                editor.putString(KEY_FILE_URI, uri.toString())
-                editor.apply()
-
-                // Process the file
-                processCsvFile(uri)
-            }
-        }
-    }
-
-    override fun onNavigationItemSelected(item: MenuItem): Boolean {
-        when (item.itemId) {
-            R.id.nav_main_dashboard -> {
-                // Already on the MainActivity, no action needed
-            }
-            R.id.nav_activity_report -> {
-                // Open ReportsActivity
-                startActivity(Intent(this, ReportsActivity::class.java))
-            }
-        }
-        drawerLayout.closeDrawer(GravityCompat.START)
-        return true
-    }
-
-    private fun openFilePicker() {
-        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
-            addCategory(Intent.CATEGORY_OPENABLE)
-            type = "*/*"  // Adjust to the file type you expect, e.g. "text/csv"
-        }
-        startActivityForResult(intent, REQUEST_CODE_PICK_CSV)
-    }
-
-    private fun saveCheckboxState(key: String, isChecked: Boolean) {
-        val sharedPreferences = getSharedPreferences(PREFERENCES_FILE, MODE_PRIVATE)
-        val editor = sharedPreferences.edit()
-        editor.putBoolean(key, isChecked)
-        editor.apply()
-    }
-
-
-    private fun setupCheckboxListeners(sharedPreferences: SharedPreferences) {
-        findViewById<CheckBox>(R.id.cbAccelerometerX).setOnCheckedChangeListener { _, isChecked ->
-            saveCheckboxState(KEY_CHECKBOX_ACCEL_X, isChecked)
-            updateChartVisibility() // Update charts as needed
-        }
-        findViewById<CheckBox>(R.id.cbAccelerometerY).setOnCheckedChangeListener { _, isChecked ->
-            saveCheckboxState(KEY_CHECKBOX_ACCEL_Y, isChecked)
-            updateChartVisibility()
-        }
-        findViewById<CheckBox>(R.id.cbAccelerometerZ).setOnCheckedChangeListener { _, isChecked ->
-            saveCheckboxState(KEY_CHECKBOX_ACCEL_Z, isChecked)
-            updateChartVisibility()
-        }
-        findViewById<CheckBox>(R.id.cbGyroscopeX).setOnCheckedChangeListener { _, isChecked ->
-            saveCheckboxState(KEY_CHECKBOX_GYRO_X, isChecked)
-            updateChartVisibility()
-        }
-        findViewById<CheckBox>(R.id.cbGyroscopeY).setOnCheckedChangeListener { _, isChecked ->
-            saveCheckboxState(KEY_CHECKBOX_GYRO_Y, isChecked)
-            updateChartVisibility()
-        }
-        findViewById<CheckBox>(R.id.cbGyroscopeZ).setOnCheckedChangeListener { _, isChecked ->
-            saveCheckboxState(KEY_CHECKBOX_GYRO_Z, isChecked)
-            updateChartVisibility()
-        }
-    }
-
-    private fun processCsvFile(uri: Uri) {
-        CoroutineScope(Dispatchers.IO).launch {
+    private suspend fun processCsvFile(uri: Uri): SensorData? {
+        return withContext(Dispatchers.IO) {
             try {
                 val contentResolver = contentResolver
                 contentResolver.openInputStream(uri)?.use { inputStream ->
@@ -300,24 +244,16 @@ class MainActivity : AppCompatActivity(), NavigationView.OnNavigationItemSelecte
                     Log.d("CSVProcessing", "Gyroscope Y size: ${gyroscopeY.size}")
                     Log.d("CSVProcessing", "Gyroscope Z size: ${gyroscopeZ.size}")
 
-                    // Switch to the main thread to update the chart UI
-                    withContext(Dispatchers.Main) {
-                        // Update the period text view
-                        val periodTextView = findViewById<TextView>(R.id.tvDataPeriod)
-                        periodTextView.text = periodText
-
-                        setupChart(
-                            accelerometerX, accelerometerY, accelerometerZ,
-                            gyroscopeX, gyroscopeY, gyroscopeZ,
-                            activityRanges, activityIds
-                        )
-                    }
+                    // Return the processed data
+                    return@withContext SensorData(
+                        accelerometerX, accelerometerY, accelerometerZ,
+                        gyroscopeX, gyroscopeY, gyroscopeZ,
+                        activityRanges, activityIds, periodText
+                    )
                 }
             } catch (e: Exception) {
-                withContext(Dispatchers.Main) {
-                    Log.e("FilePicker", "Error processing file", e)
-                    Toast.makeText(this@MainActivity, "Error processing file", Toast.LENGTH_SHORT).show()
-                }
+                Log.e("FilePicker", "Error processing file", e)
+                return@withContext null
             }
         }
     }
@@ -480,6 +416,97 @@ class MainActivity : AppCompatActivity(), NavigationView.OnNavigationItemSelecte
             updateChartVisibility()
         } catch (e: Exception) {
             Log.e("setupChart", "Error setting up chart", e)
+        }
+    }
+
+    @Deprecated("This method has been deprecated in favor of using the Activity Result API\n      which brings increased type safety via an {@link ActivityResultContract} and the prebuilt\n      contracts for common intents available in\n      {@link androidx.activity.result.contract.ActivityResultContracts}, provides hooks for\n      testing, and allow receiving results in separate, testable classes independent from your\n      activity. Use\n      {@link #registerForActivityResult(ActivityResultContract, ActivityResultCallback)}\n      with the appropriate {@link ActivityResultContract} and handling the result in the\n      {@link ActivityResultCallback#onActivityResult(Object) callback}.")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == REQUEST_CODE_PICK_CSV && resultCode == Activity.RESULT_OK) {
+            data?.data?.let { uri ->
+                // Persist the URI permission to access the file later
+                contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+
+                // Save the URI in SharedPreferences
+                val sharedPreferences = getSharedPreferences(PREFERENCES_FILE, MODE_PRIVATE)
+                val editor = sharedPreferences.edit()
+                editor.putString(KEY_FILE_URI, uri.toString())
+                editor.apply()
+
+                // Process the file
+                CoroutineScope(Dispatchers.Main).launch {
+                    val sensorData = processCsvFile(uri)
+                    sensorData?.let {
+                        findViewById<TextView>(R.id.tvDataPeriod).text = it.periodText
+
+                        setupChart(
+                            it.accelerometerX, it.accelerometerY, it.accelerometerZ,
+                            it.gyroscopeX, it.gyroscopeY, it.gyroscopeZ,
+                            it.activityRanges, it.activityIds
+                        )
+
+                    } ?: run {
+                        Toast.makeText(this@MainActivity, "Error processing CSV data", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+        }
+    }
+
+    override fun onNavigationItemSelected(item: MenuItem): Boolean {
+        when (item.itemId) {
+            R.id.nav_main_dashboard -> {
+                // Already on the MainActivity, no action needed
+            }
+            R.id.nav_activity_report -> {
+                // Open ReportsActivity
+                startActivity(Intent(this, ReportsActivity::class.java))
+            }
+        }
+        drawerLayout.closeDrawer(GravityCompat.START)
+        return true
+    }
+
+    private fun openFilePicker() {
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "*/*"  // Adjust to the file type you expect, e.g. "text/csv"
+        }
+        startActivityForResult(intent, REQUEST_CODE_PICK_CSV)
+    }
+
+    private fun saveCheckboxState(key: String, isChecked: Boolean) {
+        val sharedPreferences = getSharedPreferences(PREFERENCES_FILE, MODE_PRIVATE)
+        val editor = sharedPreferences.edit()
+        editor.putBoolean(key, isChecked)
+        editor.apply()
+    }
+
+
+    private fun setupCheckboxListeners(sharedPreferences: SharedPreferences) {
+        findViewById<CheckBox>(R.id.cbAccelerometerX).setOnCheckedChangeListener { _, isChecked ->
+            saveCheckboxState(KEY_CHECKBOX_ACCEL_X, isChecked)
+            updateChartVisibility() // Update charts as needed
+        }
+        findViewById<CheckBox>(R.id.cbAccelerometerY).setOnCheckedChangeListener { _, isChecked ->
+            saveCheckboxState(KEY_CHECKBOX_ACCEL_Y, isChecked)
+            updateChartVisibility()
+        }
+        findViewById<CheckBox>(R.id.cbAccelerometerZ).setOnCheckedChangeListener { _, isChecked ->
+            saveCheckboxState(KEY_CHECKBOX_ACCEL_Z, isChecked)
+            updateChartVisibility()
+        }
+        findViewById<CheckBox>(R.id.cbGyroscopeX).setOnCheckedChangeListener { _, isChecked ->
+            saveCheckboxState(KEY_CHECKBOX_GYRO_X, isChecked)
+            updateChartVisibility()
+        }
+        findViewById<CheckBox>(R.id.cbGyroscopeY).setOnCheckedChangeListener { _, isChecked ->
+            saveCheckboxState(KEY_CHECKBOX_GYRO_Y, isChecked)
+            updateChartVisibility()
+        }
+        findViewById<CheckBox>(R.id.cbGyroscopeZ).setOnCheckedChangeListener { _, isChecked ->
+            saveCheckboxState(KEY_CHECKBOX_GYRO_Z, isChecked)
+            updateChartVisibility()
         }
     }
 
