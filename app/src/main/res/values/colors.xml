@@ -7,4 +7,9 @@
     <color name="highlight_sitting">#400000FF</color>    <!-- 50% opacity Blue -->
     <color name="highlight_walking">#40FF0000</color>    <!-- 50% opacity Red -->
     <color name="highlight_default">#40C0C0C0</color>    <!-- 50% opacity Light Gray -->
+    <color name="flat_blue">#3498db</color>
+    <color name="flat_green">#2ecc71</color>
+    <color name="flat_red">#e74c3c</color>
+    <color name="flat_yellow">#f1c40f</color>
+    <color name="flat_purple">#9b59b6</color>
 </resources>

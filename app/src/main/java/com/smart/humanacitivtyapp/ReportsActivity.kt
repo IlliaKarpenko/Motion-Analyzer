@@ -1,68 +1,122 @@
 package com.smart.humanacitivtyapp
 
+import android.graphics.Color
+import android.net.Uri
 import android.os.Bundle
 import android.view.MenuItem
+import android.widget.TextView
+import android.widget.Toast
 import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.Toolbar
+import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import com.github.mikephil.charting.animation.Easing
 import com.github.mikephil.charting.charts.PieChart
 import com.github.mikephil.charting.components.Description
 import com.github.mikephil.charting.data.PieData
 import com.github.mikephil.charting.data.PieDataSet
 import com.github.mikephil.charting.data.PieEntry
 import com.github.mikephil.charting.utils.ColorTemplate
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class ReportsActivity : AppCompatActivity() {
+
+    private lateinit var pieChart: PieChart
+    private val KEY_FILE_URI = "file_uri"
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_reports)
 
-        // Set the Toolbar as the ActionBar
+        // Set up the toolbar as the action bar
         val toolbar: Toolbar = findViewById(R.id.toolbar)
         setSupportActionBar(toolbar)
-
-        // Enable the back button in the toolbar
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
-        supportActionBar?.setHomeAsUpIndicator(R.drawable.baseline_arrow_back) // Optional, you can set your own back icon
 
-        // Set the title of the toolbar
-        supportActionBar?.title = "Activity Report"
+        // Get the URI from SharedPreferences
+        val sharedPreferences = getSharedPreferences("app_preferences", MODE_PRIVATE)
+        val lastFileUri = sharedPreferences.getString(KEY_FILE_URI, null)
 
-        val pieChart = findViewById<PieChart>(R.id.pieChart)
+        // If the URI is available, process the CSV file
+        lastFileUri?.let {
+            val uri = Uri.parse(it)
+            loadSensorData(uri)
+        } ?: run {
+            // Handle the case where the URI is not found
+            Toast.makeText(this, "No CSV file selected. Please choose a file.", Toast.LENGTH_SHORT).show()
+        }
+    }
 
-        // Sample data - replace with actual data
-        val activityDurations = mapOf(
-            "Sitting" to 120f, // minutes
-            "Walking" to 90f,
-            "Running" to 45f,
-            "Cycling" to 60f
-        )
+    private fun getActivityColor(activityId: Int): Int {
+        return when (activityId) {
+            5 -> ContextCompat.getColor(this, R.color.flat_yellow)
+            1 -> ContextCompat.getColor(this, R.color.flat_green)
+            2 -> ContextCompat.getColor(this, R.color.flat_blue)
+            12 -> ContextCompat.getColor(this, R.color.flat_red)
+            else -> ContextCompat.getColor(this, R.color.flat_purple)
+        }
+    }
 
-        // Convert data to PieEntry format
-        val entries = ArrayList<PieEntry>()
-        for ((activity, duration) in activityDurations) {
-            entries.add(PieEntry(duration, activity))
+    private fun populatePieChart(activityIds: List<Int>, activityRanges: List<Pair<Float, Float>>, periodText: String) {
+        val activityTimes = mutableMapOf<Int, Float>() // Map to store total time for each activity
+
+        // Calculate total time for each activity ID
+        for (i in activityIds.indices) {
+            val activityId = activityIds[i]
+            val timeRange = activityRanges[i]
+            val duration = timeRange.second - timeRange.first // Calculate duration for this activity
+
+            // Accumulate the duration for each activity ID
+            activityTimes[activityId] = (activityTimes[activityId] ?: 0f) + duration
         }
 
-        // Create PieDataSet
-        val dataSet = PieDataSet(entries, "Activity Duration")
-        dataSet.colors = ColorTemplate.MATERIAL_COLORS.toList() // Set colors for slices
+        val pieEntries = mutableListOf<PieEntry>()
+        val colors = mutableListOf<Int>() // List to hold the colors
 
-        // Create PieData
-        val data = PieData(dataSet)
+        // Prepare PieEntries based on total time
+        for ((activityId, totalTime) in activityTimes) {
+            val color = getActivityColor(activityId)
+            pieEntries.add(PieEntry(totalTime, when (activityId) {
+                1 -> "Standing"
+                2 -> "Sitting"
+                5 -> "Stand-Sit"
+                12 -> "Walking"
+                else -> "Unknown"
+            }))
+            colors.add(color) // Add the color to the colors list
+        }
 
-        // Set data and update chart
-        pieChart.data = data
+        // Set up the PieChart here
+        pieChart = findViewById<PieChart>(R.id.pieChart)
+        val pieDataSet = PieDataSet(pieEntries, "").apply {
+            this.colors = colors // Assign the list of colors directly
+            valueTextSize = 16f
+            setDrawValues(true)// Remove section legends
+        }
+
+        pieChart.legend.textSize = 16f
+        pieChart.data = PieData(pieDataSet)
+        pieChart.description.isEnabled = false // Disable the description label
         pieChart.invalidate() // Refresh the chart
 
-        // Customize the chart (optional)
-        pieChart.description = Description().apply {
-            text = "Total Duration of Activities"
+        // Update the activity breakdown message
+        findViewById<TextView>(R.id.tvActivityBreakdown).text = "$periodText"
+    }
+
+    private fun loadSensorData(uri: Uri) {
+        CoroutineScope(Dispatchers.IO).launch {
+            val sensorData = CsvUtils.processCsvFile(uri, contentResolver)
+            withContext(Dispatchers.Main) {
+                sensorData?.let { data ->
+                    populatePieChart(data.activityIds, data.activityRanges, data.periodText)
+                }
+            }
         }
-        pieChart.isRotationEnabled = true // Enable rotation
-        pieChart.animateY(1000) // Animation
     }
 
     // Handle the back button click in the toolbar

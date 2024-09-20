@@ -10,9 +10,10 @@
         android:layout_width="match_parent"
         android:layout_height="?attr/actionBarSize"
         android:background="?attr/colorPrimary"
-        android:elevation="4dp"
-        app:popupTheme="@style/ThemeOverlay.AppCompat.Light"
-        app:layout_constraintTop_toTopOf="parent" />
+        android:theme="@style/ThemeOverlay.AppCompat.Dark.ActionBar"
+        app:title="Reports"
+        app:layout_constraintTop_toTopOf="parent"
+        app:popupTheme="@style/ThemeOverlay.AppCompat.Light"/>
 
     <!-- Main content for the reports goes here -->
     <!-- For example, some text or a RecyclerView -->
@@ -23,10 +24,37 @@
         android:layout_height="match_parent"
         android:gravity="center">
 
+        <TextView
+            android:id="@+id/tvActivity"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Your activity breakdown"
+            android:textSize="18sp"
+            android:layout_gravity="center"
+            android:paddingBottom="8dp" />
+
+        <TextView
+            android:id="@+id/tvActivityBreakdown"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Data Period:"
+            android:textSize="18sp"
+            android:layout_gravity="center"
+            android:paddingBottom="8dp" />
+
         <com.github.mikephil.charting.charts.PieChart
             android:id="@+id/pieChart"
             android:layout_width="match_parent"
             android:layout_height="400dp"/>
+
+        <TextView
+            android:id="@+id/tvLegend"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="activity duration in seconds"
+            android:textSize="16sp"
+            android:layout_gravity="center"
+            android:paddingTop="4dp" />
 
     </LinearLayout>
 
