@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+        android:id="@+id/nav_main_dashboard"
+        android:title="Main Dashboard"
+        android:icon="@drawable/query_stats"/>
+    <item
+        android:id="@+id/nav_activity_report"
+        android:title="Activity Report"
+        android:icon="@drawable/baseline_summarize"/>
+</menu>

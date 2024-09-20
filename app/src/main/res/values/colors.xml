@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="black">#FF000000</color>
+    <color name="white">#FFFFFFFF</color>
+    <color name="highlight_stand_sit">#40FFFF00</color>  <!-- 50% opacity Yellow -->
+    <color name="highlight_standing">#4000FF00</color>   <!-- 50% opacity Green -->
+    <color name="highlight_sitting">#400000FF</color>    <!-- 50% opacity Blue -->
+    <color name="highlight_walking">#40FF0000</color>    <!-- 50% opacity Red -->
+    <color name="highlight_default">#40C0C0C0</color>    <!-- 50% opacity Light Gray -->
+</resources>
